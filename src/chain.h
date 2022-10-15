@@ -12,7 +12,9 @@
 #include <primitives/block.h>
 #include <sync.h>
 #include <uint256.h>
+#include <util/system.h>
 #include <util/time.h>
+#include <util/moneystr.h>
 
 #include <vector>
 
@@ -213,6 +215,68 @@ public:
     //! (memory only) Maximum nTime in the chain up to and including this block.
     unsigned int nTimeMax{0};
 
+    // money supply related block index fields
+    CAmount nMint{0};
+    CAmount nMoneySupply{0};
+
+    // proof-of-stake related block index fields
+    unsigned int nFlags{0};
+    enum {
+        BLOCK_PROOF_OF_STAKE = (1 << 0), // is proof-of-stake block
+        BLOCK_STAKE_ENTROPY  = (1 << 1), // entropy bit for stake modifier
+        BLOCK_STAKE_MODIFIER = (1 << 2), // regenerated stake modifier
+    };
+
+    uint64_t nStakeModifier{0};
+    unsigned int nStakeModifierChecksum{0};
+    COutPoint prevoutStake{};
+    unsigned int nStakeTime{0};
+    uint256 hashProofOfStake{};
+
+    bool IsProofOfWork() const
+    {
+        return !(IsProofOfStake());
+    }
+
+    bool IsProofOfStake() const
+    {
+        return (nNonce == 0);
+    }
+
+    void SetProofOfStake()
+    {
+        nFlags |= BLOCK_PROOF_OF_STAKE;
+    }
+
+    unsigned int GetStakeEntropyBit() const
+    {
+        unsigned int nEntropyBit = ((GetBlockHash().Get64()) & 1);
+        // LogPrintf("GetStakeEntropyBit: nHeight=%u hashBlock=%s nEntropyBit=%u\n", nHeight, GetBlockHash().ToString(), nEntropyBit);
+        return nEntropyBit;
+    }
+
+    bool SetStakeEntropyBit(unsigned int nEntropyBit)
+    {
+        if (nEntropyBit > 1)
+            return false;
+        nFlags |= (nEntropyBit ? BLOCK_STAKE_ENTROPY : 0);
+        return true;
+    }
+
+    bool GeneratedStakeModifier() const
+    {
+        return (nFlags & BLOCK_STAKE_MODIFIER);
+    }
+
+    void SetStakeModifier(uint64_t nModifier, bool fGeneratedStakeModifier)
+    {
+        nStakeModifier = nModifier;
+        if (fGeneratedStakeModifier)
+            nFlags |= BLOCK_STAKE_MODIFIER;
+    }
+
+    arith_uint256 GetBlockTrust() const;
+
     CBlockIndex()
     {
     }
@@ -307,7 +371,18 @@ public:
         return pbegin[(pend - pbegin) / 2];
     }
 
-    std::string ToString() const;
+    std::string ToString() const
+    {
+        return strprintf("CBlockIndex(nprev=%08x, nFile=%d, nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016llx, nStakeModifierChecksum=%08x, hashProofOfStake=%s, prevoutStake=(%s), nStakeTime=%d merkle=%s, hashBlock=%s)",
+            pprev, nFile, nHeight,
+            FormatMoney(nMint), FormatMoney(nMoneySupply),
+            GeneratedStakeModifier() ? "MOD" : "-", GetStakeEntropyBit(), IsProofOfStake()? "PoS" : "PoW",
+            nStakeModifier, nStakeModifierChecksum,
+            hashProofOfStake.ToString(),
+            prevoutStake.ToString(), nStakeTime,
+            hashMerkleRoot.ToString().substr(0,10),
+            GetBlockHash().ToString().substr(0,20));
+    }
 
     //! Check whether this block index entry is valid up to the passed validity level.
     bool IsValid(enum BlockStatus nUpTo = BLOCK_VALID_TRANSACTIONS) const
@@ -392,6 +467,18 @@ public:
         if (obj.nStatus & (BLOCK_HAVE_DATA | BLOCK_HAVE_UNDO)) READWRITE(VARINT_MODE(obj.nFile, VarIntMode::NONNEGATIVE_SIGNED));
         if (obj.nStatus & BLOCK_HAVE_DATA) READWRITE(VARINT(obj.nDataPos));
         if (obj.nStatus & BLOCK_HAVE_UNDO) READWRITE(VARINT(obj.nUndoPos));
+
+        READWRITE(obj.nMint);
+        READWRITE(obj.nMoneySupply);
+        READWRITE(obj.nFlags);
+        READWRITE(obj.nStakeModifier);
+
+        if (obj.nFlags & BLOCK_PROOF_OF_STAKE)
+        {
+            READWRITE(obj.prevoutStake);
+            READWRITE(obj.nStakeTime);
+            READWRITE(obj.hashProofOfStake);
+        }
 
         // block header
         READWRITE(obj.nVersion);

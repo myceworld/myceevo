@@ -120,6 +120,16 @@ struct Params {
     /** By default assume that the signatures in ancestors of this block are valid */
     uint256 defaultAssumeValid;
 
+    /** Proof of stake parameters */
+    int nStakeMinAge;
+    int nStakeMaxAge;
+    int nPoSBlock;
+    int nPoWBlock;
+    int nModifierUpgrade;
+    int nWalletUpgrade;
+    int nWalletVersion;
+    unsigned int nModifierInterval;
+
     /**
      * If true, witness commitments contain a payload equal to a Bitcoin Script solution
      * to the signet challenge. See BIP325.
