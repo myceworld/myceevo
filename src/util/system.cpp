@@ -83,6 +83,11 @@ const int64_t nStartupTime = GetTime();
 const char * const BITCOIN_CONF_FILENAME = "bitcoin.conf";
 const char * const BITCOIN_SETTINGS_FILENAME = "settings.json";
 
+bool fMasterNode;
+std::string strMasterNodeAddr;
+std::string strBudgetMode;
+std::string strMasterNodePrivKey;
+
 ArgsManager gArgs;
 
 /** Mutex to protect dir_locks. */
@@ -1427,6 +1432,13 @@ fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific)
         return path;
     }
     return fsbridge::AbsPathJoin(net_specific ? gArgs.GetDataDirNet() : gArgs.GetDataDirBase(), path);
+}
+
+fs::path GetMasternodeConfigFile()
+{
+    fs::path pathConfigFile{gArgs.GetPathArg("-mnconf", "masternode.conf")};
+    pathConfigFile = gArgs.GetDataDirNet() / pathConfigFile;
+    return pathConfigFile;
 }
 
 void ScheduleBatchPriority()

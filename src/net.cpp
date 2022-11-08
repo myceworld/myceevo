@@ -2621,6 +2621,14 @@ bool CConnman::DisconnectNode(NodeId id)
     return false;
 }
 
+void CConnman::RelayInv(CInv& inv)
+{
+    LOCK(m_nodes_mutex);
+    for(CNode* pnode : m_nodes) {
+        // TODO pnode->PushInventory(inv);
+    }
+}
+
 void CConnman::RecordBytesRecv(uint64_t bytes)
 {
     nTotalBytesRecv += bytes;
@@ -2825,6 +2833,18 @@ bool CConnman::ForNode(NodeId id, std::function<bool(CNode* pnode)> func)
         }
     }
     return found != nullptr && NodeFullyConnected(found) && func(found);
+}
+
+void CConnman::CopyNodeVector(std::vector<CNode*>& vecNodesCopy)
+{
+    LOCK(m_nodes_mutex);
+    for (size_t i = 0; i < m_nodes.size(); ++i) {
+        CNode* pnode = m_nodes[i];
+        if (!NodeFullyConnected(pnode))
+            continue;
+        pnode->AddRef();
+        vecNodesCopy.push_back(pnode);
+    }
 }
 
 CSipHasher CConnman::GetDeterministicRandomizer(uint64_t id) const

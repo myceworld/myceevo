@@ -184,6 +184,20 @@ BITCOIN_CORE_H = \
   logging.h \
   logging/timer.h \
   mapport.h \
+  masternode/init.h \
+  masternode/activemasternode.h \
+  masternode/budgetdb.h \
+  masternode/masternode-budget.h \
+  masternode/masternodeconfig.h \
+  masternode/masternode.h \
+  masternode/masternodeman.h \
+  masternode/masternode-payments.h \
+  masternode/masternode-sync.h \
+  masternode/masternodesigner.h \
+  masternode/masternodeutil.h \
+  masternode/netfulfilledman.h \
+  masternode/spork.h \
+  masternode/sporkdb.h \
   memusage.h \
   merkleblock.h \
   net.h \
@@ -639,6 +653,20 @@ libbitcoin_common_a_SOURCES = \
   init/common.cpp \
   key.cpp \
   key_io.cpp \
+  masternode/init.cpp \
+  masternode/activemasternode.cpp \
+  masternode/budgetdb.cpp \
+  masternode/masternode-budget.cpp \
+  masternode/masternodeconfig.cpp \
+  masternode/masternode.cpp \
+  masternode/masternodeman.cpp \
+  masternode/masternode-payments.cpp \
+  masternode/masternode-sync.cpp \
+  masternode/masternodesigner.cpp \
+  masternode/masternodeutil.cpp \
+  masternode/netfulfilledman.cpp \
+  masternode/spork.cpp \
+  masternode/sporkdb.cpp \
   merkleblock.cpp \
   net_types.cpp \
   netaddress.cpp \
@@ -996,6 +1024,7 @@ CLEANFILES += crc32c/src/*.gcda crc32c/src/*.gcno
 CLEANFILES += crypto/*.gcda crypto/*.gcno
 CLEANFILES += index/*.gcda index/*.gcno
 CLEANFILES += interfaces/*.gcda interfaces/*.gcno
+CLEANFILES += masternode/*.gcda masternode/*.gcno
 CLEANFILES += node/*.gcda node/*.gcno
 CLEANFILES += policy/*.gcda policy/*.gcno
 CLEANFILES += pos/*.gcda pos/*.gcno

@@ -88,6 +88,11 @@ public:
         return sizeof(m_data);
     }
 
+    uint32_t Get32(int n = 0) const
+    {
+        return m_data[2 * n];
+    }
+
     uint64_t Get64(int n = 0) const
     {
         return m_data[2 * n] | (uint64_t)m_data[2 * n + 1] << 32;

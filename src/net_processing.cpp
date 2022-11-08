@@ -41,6 +41,13 @@
 #include <util/trace.h>
 #include <validation.h>
 
+#include <masternode/init.h>
+#include <masternode/masternode-budget.h>
+#include <masternode/masternode-payments.h>
+#include <masternode/masternode-sync.h>
+#include <masternode/masternodeman.h>
+#include <masternode/spork.h>
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -4734,6 +4741,15 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
             }
         }
         return;
+    }
+
+    // masternode-type messages
+    {
+        mnodeman.ProcessMessage(&pfrom, msg_type, vRecv, &m_connman);
+        budget.ProcessMessage(&pfrom, msg_type, vRecv, &m_connman);
+        masternodePayments.ProcessMessage(&pfrom, msg_type, vRecv, &m_connman);
+        ProcessSpork(&pfrom, msg_type, vRecv, &m_connman);
+        masternodeSync.ProcessMessage(&pfrom, msg_type, vRecv, &m_connman);
     }
 
     // Ignore unknown commands for extensibility

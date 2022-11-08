@@ -41,6 +41,11 @@ int64_t GetStartupTime();
 extern const char * const BITCOIN_CONF_FILENAME;
 extern const char * const BITCOIN_SETTINGS_FILENAME;
 
+extern bool fMasterNode;
+extern std::string strMasterNodeAddr;
+extern std::string strBudgetMode;
+extern std::string strMasterNodePrivKey;
+
 void SetupEnvironment();
 bool SetupNetworking();
 
@@ -95,6 +100,7 @@ void ReleaseDirectoryLocks();
 
 bool TryCreateDirectories(const fs::path& p);
 fs::path GetDefaultDataDir();
+fs::path GetMasternodeConfigFile();
 // Return true if -datadir option points to a valid directory or is not specified.
 bool CheckDataDirOption();
 fs::path GetConfigFile(const fs::path& configuration_file_path);

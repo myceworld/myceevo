@@ -35,7 +35,7 @@ struct LogCategory {
 };
 
 namespace BCLog {
-    enum LogFlags : uint32_t {
+    enum LogFlags : uint64_t {
         NONE        = 0,
         NET         = (1 <<  0),
         TOR         = (1 <<  1),
@@ -67,7 +67,10 @@ namespace BCLog {
         UTIL        = (1 << 25),
         BLOCKSTORE  = (1 << 26),
         POS         = (1 << 27),
-        ALL         = ~(uint32_t)0,
+        MASTERNODE  = (1 << 28),
+        MNPAYMENTS  = (1 << 29),
+        MNBUDGET    = (1 << 30),
+        ALL         = ~(uint64_t)0,
     };
     enum class Level {
         Trace = 0, // High-volume or detailed logging for development/debugging
@@ -103,7 +106,7 @@ namespace BCLog {
         std::atomic<Level> m_log_level{DEFAULT_LOG_LEVEL};
 
         /** Log categories bitfield. */
-        std::atomic<uint32_t> m_categories{0};
+        std::atomic<uint64_t> m_categories{0};
 
         std::string LogTimestampStr(const std::string& str);
 
@@ -170,7 +173,7 @@ namespace BCLog {
         void SetLogLevel(Level level) { m_log_level = level; }
         bool SetLogLevel(const std::string& level);
 
-        uint32_t GetCategoryMask() const { return m_categories.load(); }
+        uint64_t GetCategoryMask() const { return m_categories.load(); }
 
         void EnableCategory(LogFlags flag);
         bool EnableCategory(const std::string& str);

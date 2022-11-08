@@ -128,7 +128,9 @@ struct Params {
     int nModifierUpgrade;
     int nWalletUpgrade;
     int nWalletVersion;
+    int nBudgetFeeConfirmations;
     unsigned int nModifierInterval;
+    std::string nSporkKey;
 
     /**
      * If true, witness commitments contain a payload equal to a Bitcoin Script solution

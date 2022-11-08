@@ -44,6 +44,20 @@ const char *CFHEADERS="cfheaders";
 const char *GETCFCHECKPT="getcfcheckpt";
 const char *CFCHECKPT="cfcheckpt";
 const char *WTXIDRELAY="wtxidrelay";
+////////////////////////////////////
+const char *SPORK = "spork";
+const char *GETSPORKS = "getsporks";
+const char *MNBROADCAST = "mnb";
+const char *MNPING = "mnp";
+const char *MNWINNER = "mnw";
+const char *GETMNWINNERS = "mnget";
+const char *BUDGETPROPOSAL = "mprop";
+const char *BUDGETVOTE = "mvote";
+const char *BUDGETVOTESYNC = "mnvs";
+const char *FINALBUDGET = "fbs";
+const char *FINALBUDGETVOTE = "fbvote";
+const char *SYNCSTATUSCOUNT = "ssc";
+const char *GETMNLIST = "dseg";
 } // namespace NetMsgType
 
 /** All known message types. Keep this in the same order as the list of
@@ -84,6 +98,20 @@ const static std::string allNetMessageTypes[] = {
     NetMsgType::GETCFCHECKPT,
     NetMsgType::CFCHECKPT,
     NetMsgType::WTXIDRELAY,
+    ///////////////////////
+    NetMsgType::SPORK,
+    NetMsgType::MNWINNER,
+    NetMsgType::BUDGETVOTE,
+    NetMsgType::BUDGETPROPOSAL,
+    NetMsgType::FINALBUDGET,
+    NetMsgType::FINALBUDGETVOTE,
+    NetMsgType::MNBROADCAST,
+    NetMsgType::MNPING,
+    NetMsgType::GETMNWINNERS,
+    NetMsgType::GETMNLIST,
+    NetMsgType::BUDGETVOTESYNC,
+    NetMsgType::GETSPORKS,
+    NetMsgType::SYNCSTATUSCOUNT,
 };
 const static std::vector<std::string> allNetMessageTypesVec(std::begin(allNetMessageTypes), std::end(allNetMessageTypes));
 
