@@ -562,6 +562,12 @@ public:
     {
         return type == MSG_BLOCK || type == MSG_FILTERED_BLOCK || type == MSG_CMPCT_BLOCK || type == MSG_WITNESS_BLOCK;
     }
+    bool IsGenMnMsg() const
+    {
+        return type == MSG_SPORK || type == MSG_MASTERNODE_WINNER || type == MSG_BUDGET_VOTE || type == MSG_BUDGET_PROPOSAL || \
+               type == MSG_BUDGET_FINALIZED || type == MSG_BUDGET_FINALIZED_VOTE || type == MSG_MASTERNODE_ANNOUNCE || \
+               type == MSG_MASTERNODE_PING;
+    }
 
     uint32_t type;
     uint256 hash;

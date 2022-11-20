@@ -202,6 +202,7 @@ BITCOIN_CORE_H = \
   merkleblock.h \
   net.h \
   net_permissions.h \
+  mn_processing.h \
   net_processing.h \
   net_types.h \
   netaddress.h \
@@ -667,6 +668,7 @@ libbitcoin_common_a_SOURCES = \
   masternode/netfulfilledman.cpp \
   masternode/spork.cpp \
   masternode/sporkdb.cpp \
+  mn_processing.cpp \
   merkleblock.cpp \
   net_types.cpp \
   netaddress.cpp \

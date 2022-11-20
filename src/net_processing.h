@@ -13,6 +13,7 @@ class AddrMan;
 class CChainParams;
 class CTxMemPool;
 class ChainstateManager;
+class Peer;
 
 /** Default for -maxorphantx, maximum number of orphan transactions kept in memory */
 static const unsigned int DEFAULT_MAX_ORPHAN_TRANSACTIONS = 100;
@@ -66,6 +67,9 @@ public:
 
     /** Relay transaction to all peers. */
     virtual void RelayTransaction(const uint256& txid, const uint256& wtxid) = 0;
+
+    /** Relay inventory to all peers. */
+    virtual void RelayInventory(const CInv& inv) = 0;
 
     /** Send ping message to all peers */
     virtual void SendPings() = 0;

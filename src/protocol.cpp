@@ -190,6 +190,14 @@ std::string CInv::GetCommand() const
     case MSG_BLOCK:          return cmd.append(NetMsgType::BLOCK);
     case MSG_FILTERED_BLOCK: return cmd.append(NetMsgType::MERKLEBLOCK);
     case MSG_CMPCT_BLOCK:    return cmd.append(NetMsgType::CMPCTBLOCK);
+    case MSG_SPORK:          return cmd.append(NetMsgType::SPORK);
+    case MSG_MASTERNODE_WINNER: return cmd.append(NetMsgType::MNWINNER);
+    case MSG_BUDGET_VOTE: return cmd.append(NetMsgType::BUDGETVOTE);
+    case MSG_BUDGET_PROPOSAL: return cmd.append(NetMsgType::BUDGETPROPOSAL);
+    case MSG_BUDGET_FINALIZED: return cmd.append(NetMsgType::FINALBUDGET);
+    case MSG_BUDGET_FINALIZED_VOTE: return cmd.append(NetMsgType::FINALBUDGETVOTE);
+    case MSG_MASTERNODE_ANNOUNCE: return cmd.append(NetMsgType::MNBROADCAST);
+    case MSG_MASTERNODE_PING: return cmd.append(NetMsgType::MNPING);
     default:
         throw std::out_of_range(strprintf("CInv::GetCommand(): type=%d unknown type", type));
     }
