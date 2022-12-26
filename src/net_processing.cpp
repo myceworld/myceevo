@@ -101,7 +101,7 @@ static const unsigned int MAX_LOCATOR_SZ = 101;
 static const unsigned int MAX_INV_SZ = 50000;
 /** Maximum number of in-flight transaction requests from a peer. It is not a hard limit, but the threshold at which
  *  point the OVERLOADED_PEER_TX_DELAY kicks in. */
-static constexpr int32_t MAX_PEER_TX_REQUEST_IN_FLIGHT = 100;
+static constexpr int32_t MAX_PEER_TX_REQUEST_IN_FLIGHT = 500;
 /** Maximum number of transactions to consider for requesting, per peer. It provides a reasonable DoS limit to
  *  per-peer memory usage spent on announcements, while covering peers continuously sending INVs at the maximum
  *  rate (by our own policy, see INVENTORY_BROADCAST_PER_SECOND) for several minutes, while not receiving
@@ -299,7 +299,15 @@ struct Peer {
          *  mempool to sort transactions in dependency order before relay, so
          *  this does not have to be sorted. */
         std::set<uint256> m_tx_inventory_to_send GUARDED_BY(m_tx_inventory_mutex);
-        std::set<CInv> m_inventory_to_send GUARDED_BY(m_tx_inventory_mutex);
+
+        mutable RecursiveMutex m_inv_inventory_mutex;
+        /** A filter of all the invs that the peer has announced to
+         *  us or we have announced to the peer. We use this to avoid announcing
+         *  the same inv to a peer that already has the inventory item. */
+        CRollingBloomFilter m_inv_inventory_known_filter GUARDED_BY(m_inv_inventory_mutex){50000, 0.000001};
+        /** Set of inventory invs we still have to announce. */
+        std::set<CInv> m_inv_inventory_to_send GUARDED_BY(m_inv_inventory_mutex);
+
         /** Whether the peer has requested us to send our complete mempool. Only
          *  permitted if the peer has NetPermissionFlags::Mempool. See BIP35. */
         bool m_send_mempool GUARDED_BY(m_tx_inventory_mutex){false};
@@ -1090,8 +1098,8 @@ static void AddKnownInv(Peer& peer, const CInv& inv)
     auto tx_relay = peer.GetTxRelay();
     if (!tx_relay) return;
 
-    LOCK(tx_relay->m_tx_inventory_mutex);
-    tx_relay->m_tx_inventory_known_filter.insert(inv.hash);
+    LOCK(tx_relay->m_inv_inventory_mutex);
+    tx_relay->m_inv_inventory_known_filter.insert(inv.hash);
 }
 
 /** Whether this peer can serve us blocks. */
@@ -2087,9 +2095,9 @@ void PeerManagerImpl::PushInventory(Peer& peer, const CInv& inv)
     auto tx_relay = peer.GetTxRelay();
     if (!tx_relay) return;
 
-    LOCK(tx_relay->m_tx_inventory_mutex);
-    if (!tx_relay->m_tx_inventory_known_filter.contains(inv.hash)) {
-        tx_relay->m_inventory_to_send.insert(inv);
+    LOCK(tx_relay->m_inv_inventory_mutex);
+    if (!tx_relay->m_inv_inventory_known_filter.contains(inv.hash)) {
+        tx_relay->m_inv_inventory_to_send.insert(inv);
     }
 }
 
@@ -3722,12 +3730,14 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
 
                 AddKnownInv(*peer, inv);
                 if (!fAlreadyHave && !m_chainman.ActiveChainstate().IsInitialBlockDownload()) {
-                    ///////////
+                    pfrom.AskFor(inv);
                 }
             } else {
                 LogPrint(BCLog::NET, "Unknown inv type \"%s\" received from peer=%d\n", inv.ToString(), pfrom.GetId());
             }
         }
+
+        m_connman.PushMessage(&pfrom, msgMaker.Make(NetMsgType::GETDATA, vToFetch));
 
         if (best_block != nullptr) {
             // If we haven't started initial headers-sync with this peer, then
@@ -4846,8 +4856,6 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         masternodeSync.ProcessMessage(&pfrom, msg_type, vRecv, &m_connman);
     }
 
-    // Ignore unknown commands for extensibility
-    LogPrint(BCLog::NET, "Unknown command \"%s\" from peer=%d\n", SanitizeString(msg_type), pfrom.GetId());
     return;
 }
 
@@ -5756,20 +5764,20 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
                         }
                     }
                     // Send non-tx/non-block inventory items
-                    while (!tx_relay->m_inventory_to_send.empty() && nRelayedTransactions < INVENTORY_BROADCAST_MAX) {
+                    while (!tx_relay->m_inv_inventory_to_send.empty()) {
                         // get inv's from other set to send
-                        std::set<CInv>::const_iterator it = std::next(tx_relay->m_inventory_to_send.end(), -1);
+                        std::set<CInv>::const_iterator it = std::next(tx_relay->m_inv_inventory_to_send.end(), -1);
                         CInv inv = *it;
                         // Remove it from the to-be-sent set
-                        tx_relay->m_inventory_to_send.erase(it);
+                        tx_relay->m_inv_inventory_to_send.erase(it);
                         // Check if not in the filter already
-                        if (tx_relay->m_tx_inventory_known_filter.contains(inv.hash)) {
+                        if (tx_relay->m_inv_inventory_known_filter.contains(inv.hash)) {
                             continue;
                         }
                         // use existing limits with tx to limit other inv sends as well
                         nRelayedTransactions++;
                         vInv.emplace_back(inv);
-                        tx_relay->m_tx_inventory_known_filter.insert(inv.hash);
+                        tx_relay->m_inv_inventory_known_filter.insert(inv.hash);
                         if (vInv.size() == MAX_INV_SZ) {
                             m_connman.PushMessage(pto, msgMaker.Make(NetMsgType::INV, vInv));
                             vInv.clear();
@@ -5889,9 +5897,26 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
             }
         }
 
+        // INV getdata
+        while (!pto->mapAskFor.empty())
+        {
+            const CInv& inv = (*pto->mapAskFor.begin()).second;
+            {
+                LogPrint(BCLog::NET, "Requesting %s peer=%d\n", inv.ToString(), pto->GetId());
+                vGetData.push_back(inv);
+                if (vGetData.size() >= MAX_GETDATA_SZ)
+                {
+                    m_connman.PushMessage(pto, msgMaker.Make(NetMsgType::GETDATA, vGetData));
+                    vGetData.clear();
+                }
+            }
+            pto->mapAskFor.erase(pto->mapAskFor.begin());
+        }
 
-        if (!vGetData.empty())
+        if (!vGetData.empty()) {
             m_connman.PushMessage(pto, msgMaker.Make(NetMsgType::GETDATA, vGetData));
+        }
+
     } // release cs_main
     MaybeSendFeefilter(*pto, *peer, current_time);
     return true;

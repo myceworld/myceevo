@@ -4,9 +4,23 @@
 
 #include <masternode/masternodeutil.h>
 
-int GetInputAge(const CTxIn& vin)
+
+int GetInputAge(const CTxIn& vin, ChainstateManager* chainman)
 {
-    return 5;
+    CCoinsView viewDummy;
+    CCoinsViewCache view(&viewDummy);
+    const CTxMemPool* mempool = chainman->ActiveChainstate().GetMempool();
+    {
+        LOCK2(cs_main, mempool->cs);
+        CCoinsViewCache &viewChain = chainman->ActiveChainstate().CoinsTip();
+        CCoinsViewMemPool viewMempool(&viewChain, *mempool);
+        view.SetBackend(viewMempool);
+
+        const Coin coin = view.AccessCoin(vin.prevout);
+
+        if (coin.nHeight < 0) return 0;
+        return (chainman->ActiveChain().Tip()->nHeight + 1) - coin.nHeight;
+    }
 }
 
 int GetIXConfirmations(uint256 nTXHash)

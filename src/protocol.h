@@ -509,20 +509,26 @@ const uint32_t MSG_TYPE_MASK = 0xffffffff >> 2;
 enum GetDataMsg : uint32_t {
     UNDEFINED = 0,
     MSG_TX = 1,
-    MSG_BLOCK = 2,
-    //////////////////////////////
+    MSG_BLOCK,
+    // Nodes may always request a MSG_FILTERED_BLOCK in a getdata, however,
+    // MSG_FILTERED_BLOCK should not appear in any invs except as a part of getdata.
+    MSG_FILTERED_BLOCK,
+    MSG_TXLOCK_REQUEST,
+    MSG_TXLOCK_VOTE,
     MSG_SPORK,
     MSG_MASTERNODE_WINNER,
+    MSG_MASTERNODE_SCANNING_ERROR,
     MSG_BUDGET_VOTE,
     MSG_BUDGET_PROPOSAL,
     MSG_BUDGET_FINALIZED,
     MSG_BUDGET_FINALIZED_VOTE,
+    MSG_MASTERNODE_QUORUM,
     MSG_MASTERNODE_ANNOUNCE,
     MSG_MASTERNODE_PING,
+    MSG_DSTX,
     //////////////////////////////
     MSG_WTX,                                          //!< Defined in BIP 339
     // The following can only occur in getdata. Invs always use TX/WTX or BLOCK.
-    MSG_FILTERED_BLOCK,                               //!< Defined in BIP37
     MSG_CMPCT_BLOCK,                                  //!< Defined in BIP152
     MSG_WITNESS_BLOCK = MSG_BLOCK | MSG_WITNESS_FLAG, //!< Defined in BIP144
     MSG_WITNESS_TX = MSG_TX | MSG_WITNESS_FLAG,       //!< Defined in BIP144

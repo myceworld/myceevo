@@ -22,10 +22,12 @@
 #include <net_permissions.h>
 #include <netaddress.h>
 #include <netbase.h>
+#include <netmessagemaker.h>
 #include <node/interface_ui.h>
 #include <protocol.h>
 #include <random.h>
 #include <scheduler.h>
+#include <timedata.h>
 #include <util/sock.h>
 #include <util/strencodings.h>
 #include <util/syscall_sandbox.h>
@@ -2624,8 +2626,9 @@ bool CConnman::DisconnectNode(NodeId id)
 void CConnman::RelayInv(CInv& inv)
 {
     LOCK(m_nodes_mutex);
+    const CNetMsgMaker msgMaker(PROTOCOL_VERSION);
     for(CNode* pnode : m_nodes) {
-        // TODO pnode->PushInventory(inv);
+        PushMessage(pnode, msgMaker.Make(NetMsgType::INV, inv));
     }
 }
 
@@ -2773,6 +2776,21 @@ CNode::CNode(NodeId idIn,
     } else {
         LogPrint(BCLog::NET, "Added connection peer=%d\n", id);
     }
+}
+
+void CNode::AskFor(const CInv& inv)
+{
+    int64_t nRequestTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+    LogPrintf("askfor %s  %d (%s) peer=%d\n", inv.ToString(), nRequestTime, FormatISO8601DateTime(nRequestTime/1000000), id);
+
+    int64_t nNow = GetTimeMicros() - 1000000;
+    static int64_t nLastTime;
+    ++nLastTime;
+    nNow = std::max(nNow, nLastTime);
+    nLastTime = nNow;
+
+    nRequestTime = std::max(nRequestTime + 2 * 60 * 1000000, nNow);
+    mapAskFor.insert(std::make_pair(nRequestTime, inv));
 }
 
 bool CConnman::NodeFullyConnected(const CNode* pnode)

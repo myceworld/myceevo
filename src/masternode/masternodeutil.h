@@ -17,7 +17,7 @@
 using wallet::COutput;
 using wallet::CRecipient;
 
-int GetInputAge(const CTxIn& vin);
+int GetInputAge(const CTxIn& vin, ChainstateManager* chainman);
 int GetIXConfirmations(uint256 nTXHash);
 bool GetBudgetFinalizationCollateralTX(CTransactionRef& tx, uint256 hash);
 bool GetMasternodeVinAndKeys(CTxIn& txinRet, CPubKey& pubKeyRet, CKey& keyRet, std::string strTxHash, std::string strOutputIndex);

@@ -98,9 +98,9 @@ void CActiveMasternode::ManageStatus(CConnman* connman)
         CKey keyCollateralAddress;
 
         if (GetMasterNodeVin(vin, pubKeyCollateralAddress, keyCollateralAddress)) {
-            if (GetInputAge(vin) < MASTERNODE_MIN_CONFIRMATIONS) {
+            if (GetInputAge(vin, chainman) < MASTERNODE_MIN_CONFIRMATIONS) {
                 status = ACTIVE_MASTERNODE_INPUT_TOO_NEW;
-                notCapableReason = strprintf("%s - %d confirmations", GetStatus(), GetInputAge(vin));
+                notCapableReason = strprintf("%s - %d confirmations", GetStatus(), GetInputAge(vin, chainman));
                 LogPrintf("CActiveMasternode::ManageStatus() - %s\n", notCapableReason);
                 return;
             }
