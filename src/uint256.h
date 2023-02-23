@@ -23,6 +23,11 @@ protected:
     static constexpr int WIDTH = BITS / 8;
     uint8_t m_data[WIDTH];
 public:
+    const uint32_t *GetDataPtr() const
+    {
+        return (const uint32_t *)m_data;
+    }
+
     /* construct 0 value by default */
     constexpr base_blob() : m_data() {}
 
@@ -81,6 +86,17 @@ public:
     static constexpr unsigned int size()
     {
         return sizeof(m_data);
+    }
+
+    uint64_t Get64(int n = 0) const
+    {
+        return m_data[2 * n] | (uint64_t)m_data[2 * n + 1] << 32;
+    }
+
+    uint64_t GetLow64() const
+    {
+        assert(WIDTH >= 2);
+        return m_data[0] | (uint64_t)m_data[1] << 32;
     }
 
     uint64_t GetUint64(int pos) const

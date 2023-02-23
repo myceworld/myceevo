@@ -12,12 +12,6 @@ std::string CBlockFileInfo::ToString() const
     return strprintf("CBlockFileInfo(blocks=%u, size=%u, heights=%u...%u, time=%s...%s)", nBlocks, nSize, nHeightFirst, nHeightLast, FormatISO8601Date(nTimeFirst), FormatISO8601Date(nTimeLast));
 }
 
-std::string CBlockIndex::ToString() const
-{
-    return strprintf("CBlockIndex(pprev=%p, nHeight=%d, merkle=%s, hashBlock=%s)",
-                     pprev, nHeight, hashMerkleRoot.ToString(), GetBlockHash().ToString());
-}
-
 void CChain::SetTip(CBlockIndex& block)
 {
     CBlockIndex* pindex = &block;
@@ -126,6 +120,24 @@ void CBlockIndex::BuildSkip()
 {
     if (pprev)
         pskip = pprev->GetAncestor(GetSkipHeight(nHeight));
+}
+
+
+arith_uint256 CBlockIndex::GetBlockTrust() const
+{
+    arith_uint256 bnTarget;
+    bnTarget.SetCompact(nBits);
+    if (bnTarget <= 0)
+        return 0;
+
+    if (IsProofOfStake()) {
+        // Return trust score as usual
+        return (arith_uint256(1) << 256) / (bnTarget + 1);
+    } else {
+        // Calculate work amount for block
+        arith_uint256 bnPoWTrust = ((~arith_uint256(0) >> 20) / (bnTarget + 1));
+        return bnPoWTrust > 1 ? bnPoWTrust : 1;
+    }
 }
 
 arith_uint256 GetBlockProof(const CBlockIndex& block)

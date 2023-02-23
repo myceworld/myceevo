@@ -219,6 +219,10 @@ BITCOIN_CORE_H = \
   policy/policy.h \
   policy/rbf.h \
   policy/settings.h \
+  pos/pos.h \
+  pos/stakeinput.h \
+  pos/util.h \
+  pos/wallet.h \
   pow.h \
   protocol.h \
   psbt.h \
@@ -643,6 +647,10 @@ libmyce_common_a_SOURCES = \
   outputtype.cpp \
   policy/feerate.cpp \
   policy/policy.cpp \
+  pos/pos.cpp \
+  pos/stakeinput.cpp \
+  pos/util.cpp \
+  pos/wallet.cpp \
   protocol.cpp \
   psbt.cpp \
   rpc/rawtransaction_util.cpp \
@@ -990,6 +998,7 @@ CLEANFILES += index/*.gcda index/*.gcno
 CLEANFILES += interfaces/*.gcda interfaces/*.gcno
 CLEANFILES += node/*.gcda node/*.gcno
 CLEANFILES += policy/*.gcda policy/*.gcno
+CLEANFILES += pos/*.gcda pos/*.gcno
 CLEANFILES += primitives/*.gcda primitives/*.gcno
 CLEANFILES += rpc/*.gcda rpc/*.gcno
 CLEANFILES += script/*.gcda script/*.gcno

@@ -73,6 +73,8 @@ public:
     // network and disk
     std::vector<CTransactionRef> vtx;
 
+    std::vector<unsigned char> vchBlockSig;
+
     // memory only
     mutable bool fChecked;
 
@@ -91,6 +93,8 @@ public:
     {
         READWRITEAS(CBlockHeader, obj);
         READWRITE(obj.vtx);
+        if (obj.vtx.size() > 1 && obj.vtx[1]->IsCoinStake())
+            READWRITE(obj.vchBlockSig);
     }
 
     void SetNull()
@@ -98,6 +102,7 @@ public:
         CBlockHeader::SetNull();
         vtx.clear();
         fChecked = false;
+        vchBlockSig.clear();
     }
 
     CBlockHeader GetBlockHeader() const
@@ -110,6 +115,29 @@ public:
         block.nBits          = nBits;
         block.nNonce         = nNonce;
         return block;
+    }
+
+    bool IsProofOfStake() const
+    {
+        return (vtx.size() > 1 && vtx[1]->IsCoinStake());
+    }
+
+    bool IsProofOfWork() const
+    {
+        return !IsProofOfStake();
+    }
+
+    std::pair<COutPoint, unsigned int> GetProofOfStake() const
+    {
+        return IsProofOfStake() ? std::make_pair(vtx[1]->vin[0].prevout, nTime) : std::make_pair(COutPoint(), (unsigned int)0);
+    }
+
+    int64_t GetMaxTransactionTime() const
+    {
+        int64_t maxTransactionTime = 0;
+        for (const auto& tx : vtx)
+            maxTransactionTime = std::max(maxTransactionTime, (int64_t)tx->nTime);
+        return maxTransactionTime;
     }
 
     std::string ToString() const;
