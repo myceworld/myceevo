@@ -2,18 +2,18 @@
 
 *.exe
 *.pdb
-src/bitcoin
-src/bitcoind
-src/bitcoin-cli
-src/bitcoin-gui
-src/bitcoin-node
-src/bitcoin-tx
-src/bitcoin-util
-src/bitcoin-chainstate
-src/bitcoin-wallet
+src/myce
+src/myced
+src/myce-cli
+src/myce-gui
+src/myce-node
+src/myce-tx
+src/myce-util
+src/myce-chainstate
+src/myce-wallet
 src/test/fuzz/fuzz
-src/test/test_bitcoin
-src/qt/test/test_bitcoin-qt
+src/test/test_myce
+src/qt/test/test_myce-qt
 
 # autoreconf
 Makefile.in
@@ -50,11 +50,11 @@ src/qt/forms/ui_*.h
 
 src/qt/test/moc*.cpp
 
-src/qt/bitcoin-qt.config
-src/qt/bitcoin-qt.creator
-src/qt/bitcoin-qt.creator.user
-src/qt/bitcoin-qt.files
-src/qt/bitcoin-qt.includes
+src/qt/myce-qt.config
+src/qt/myce-qt.creator
+src/qt/myce-qt.creator.user
+src/qt/myce-qt.files
+src/qt/myce-qt.includes
 
 .deps
 .dirstamp
@@ -92,15 +92,15 @@ src/qt/bitcoin-qt.includes
 *.qm
 Makefile
 !depends/Makefile
-src/qt/bitcoin-qt
-Bitcoin-Qt.app
+src/qt/myce-qt
+Myce-Qt.app
 
 # Qt Creator
 Makefile.am.user
 
 # Unit-tests
 Makefile.test
-bitcoin-qt_test
+myce-qt_test
 
 # Resources cpp
 qrc_*.cpp
@@ -116,7 +116,7 @@ releases
 *.gcno
 *.gcda
 /*.info
-test_bitcoin.coverage/
+test_myce.coverage/
 total.coverage/
 fuzz.coverage/
 coverage_percent.txt
@@ -135,7 +135,7 @@ test/.mypy_cache/
 
 /doc/doxygen/
 
-libbitcoinconsensus.pc
+libmyceconsensus.pc
 contrib/devtools/split-debug.sh
 
 # Output from running db4 installation
