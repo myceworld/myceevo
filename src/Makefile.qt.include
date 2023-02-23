@@ -32,7 +32,8 @@ QT_FORMS_UI = \
   qt/forms/sendcoinsdialog.ui \
   qt/forms/sendcoinsentry.ui \
   qt/forms/signverifymessagedialog.ui \
-  qt/forms/transactiondescdialog.ui
+  qt/forms/transactiondescdialog.ui \
+  qt/forms/masternodelist.ui
 
 QT_MOC_CPP = \
   qt/moc_addressbookpage.cpp \
@@ -56,6 +57,7 @@ QT_MOC_CPP = \
   qt/moc_macdockiconhandler.cpp \
   qt/moc_macnotificationhandler.cpp \
   qt/moc_modaloverlay.cpp \
+  qt/moc_masternodelist.cpp \
   qt/moc_notificator.cpp \
   qt/moc_openuridialog.cpp \
   qt/moc_optionsdialog.cpp \
@@ -152,6 +154,7 @@ BITCOIN_QT_H = \
   qt/sendcoinsrecipient.h \
   qt/signverifymessagedialog.h \
   qt/splashscreen.h \
+  qt/masternodelist.h \
   qt/trafficgraphwidget.h \
   qt/transactiondesc.h \
   qt/transactiondescdialog.h \
@@ -209,6 +212,7 @@ QT_RES_ICONS = \
   qt/res/icons/remove.png \
   qt/res/icons/send.png \
   qt/res/icons/synced.png \
+  qt/res/icons/masternode.png \
   qt/res/icons/transaction0.png \
   qt/res/icons/transaction2.png \
   qt/res/icons/transaction_abandoned.png \
@@ -267,6 +271,7 @@ BITCOIN_QT_WALLET_CPP = \
   qt/sendcoinsdialog.cpp \
   qt/sendcoinsentry.cpp \
   qt/signverifymessagedialog.cpp \
+  qt/masternodelist.cpp \
   qt/transactiondesc.cpp \
   qt/transactiondescdialog.cpp \
   qt/transactionfilterproxy.cpp \

@@ -22,10 +22,12 @@
 #include <net_permissions.h>
 #include <netaddress.h>
 #include <netbase.h>
+#include <netmessagemaker.h>
 #include <node/interface_ui.h>
 #include <protocol.h>
 #include <random.h>
 #include <scheduler.h>
+#include <timedata.h>
 #include <util/sock.h>
 #include <util/strencodings.h>
 #include <util/syscall_sandbox.h>
@@ -1991,6 +1993,10 @@ void CConnman::OpenNetworkConnection(const CAddress& addrConnect, bool fCountFai
     }
 }
 
+void CConnman::OpenMasternodeConnection(const CAddress &addrConnect) {
+    OpenNetworkConnection(addrConnect, false, nullptr, nullptr, ConnectionType::OUTBOUND_FULL_RELAY);
+}
+
 void CConnman::ThreadMessageHandler()
 {
     SetSyscallSandboxPolicy(SyscallSandboxPolicy::MESSAGE_HANDLER);
@@ -2621,6 +2627,15 @@ bool CConnman::DisconnectNode(NodeId id)
     return false;
 }
 
+void CConnman::RelayInv(CInv& inv)
+{
+    LOCK(m_nodes_mutex);
+    const CNetMsgMaker msgMaker(PROTOCOL_VERSION);
+    for (CNode* pnode : m_nodes) {
+        PushMessage(pnode, msgMaker.Make(NetMsgType::INV, inv));
+    }
+}
+
 void CConnman::RecordBytesRecv(uint64_t bytes)
 {
     nTotalBytesRecv += bytes;
@@ -2767,6 +2782,12 @@ CNode::CNode(NodeId idIn,
     }
 }
 
+void CNode::AskFor(const CInv& inv)
+{
+    int64_t nRequestTime = TicksSinceEpoch<std::chrono::seconds>(GetAdjustedTime());
+    mapAskFor.insert(std::make_pair(nRequestTime, inv));
+}
+
 bool CConnman::NodeFullyConnected(const CNode* pnode)
 {
     return pnode && pnode->fSuccessfullyConnected && !pnode->fDisconnect;
@@ -2825,6 +2846,18 @@ bool CConnman::ForNode(NodeId id, std::function<bool(CNode* pnode)> func)
         }
     }
     return found != nullptr && NodeFullyConnected(found) && func(found);
+}
+
+void CConnman::CopyNodeVector(std::vector<CNode*>& vecNodesCopy)
+{
+    LOCK(m_nodes_mutex);
+    for (size_t i = 0; i < m_nodes.size(); ++i) {
+        CNode* pnode = m_nodes[i];
+        if (!NodeFullyConnected(pnode))
+            continue;
+        pnode->AddRef();
+        vecNodesCopy.push_back(pnode);
+    }
 }
 
 CSipHasher CConnman::GetDeterministicRandomizer(uint64_t id) const

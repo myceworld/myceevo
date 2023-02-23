@@ -43,6 +43,8 @@ class HelpMessageDialog;
 class ModalOverlay;
 enum class SynchronizationState;
 
+class MasternodeList;
+
 namespace interfaces {
 class Handler;
 class Node;
@@ -136,6 +138,7 @@ private:
     QToolBar* appToolBar = nullptr;
     QAction* overviewAction = nullptr;
     QAction* historyAction = nullptr;
+    QAction* masternodeAction = nullptr;
     QAction* quitAction = nullptr;
     QAction* sendCoinsAction = nullptr;
     QAction* usedSendingAddressesAction = nullptr;
@@ -288,6 +291,8 @@ public Q_SLOTS:
     void gotoVerifyMessageTab(QString addr = "");
     /** Load Partially Signed Bitcoin Transaction from file or clipboard */
     void gotoLoadPSBT(bool from_clipboard = false);
+    /** Switch to masternode manager page */
+    void gotoMasternodePage();
 
     /** Show open dialog */
     void openClicked();

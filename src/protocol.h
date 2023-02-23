@@ -258,6 +258,60 @@ extern const char* CFCHECKPT;
  * @since protocol version 70016 as described by BIP 339.
  */
 extern const char* WTXIDRELAY;
+/**
+ * The spork message is used to send spork values to connected
+ * peers
+ */
+extern const char* SPORK;
+/**
+ * The getsporks message is used to request spork data from connected peers
+ */
+extern const char* GETSPORKS;
+/**
+ * The mnbroadcast message is used to broadcast masternode startup data to connected peers
+ */
+extern const char* MNBROADCAST;
+/**
+ * The mnping message is used to ensure a masternode is still active
+ */
+extern const char* MNPING;
+/**
+ * The mnwinner message is used to relay and distribute consensus for masternode
+ * payout ordering
+ */
+extern const char* MNWINNER;
+/**
+ * The getmnwinners message is used to request winning masternode data from connected peers
+ */
+extern const char* GETMNWINNERS;
+/**
+* The dseg message is used to request the Masternode list or an specific entry
+*/
+extern const char* DSEG;
+/**
+ * The budgetproposal message is used to broadcast or relay budget proposal metadata to connected peers
+ */
+extern const char* BUDGETPROPOSAL;
+/**
+ * The budgetvote message is used to broadcast or relay budget proposal votes to connected peers
+ */
+extern const char* BUDGETVOTE;
+/**
+ * The budgetvotesync message is used to request budget vote data from connected peers
+ */
+extern const char* BUDGETVOTESYNC;
+/**
+ * The finalbudget message is used to broadcast or relay finalized budget metadata to connected peers
+ */
+extern const char* FINALBUDGET;
+/**
+ * The finalbudgetvote message is used to broadcast or relay finalized budget votes to connected peers
+ */
+extern const char* FINALBUDGETVOTE;
+/**
+ * The syncstatuscount message is used to track the layer 2 syncing process
+ */
+extern const char* SYNCSTATUSCOUNT;
 }; // namespace NetMsgType
 
 /* Get a vector of all valid message types (see above) */
@@ -456,10 +510,25 @@ enum GetDataMsg : uint32_t {
     UNDEFINED = 0,
     MSG_TX = 1,
     MSG_BLOCK = 2,
-    MSG_WTX = 5,                                      //!< Defined in BIP 339
+    MSG_FILTERED_BLOCK,                               //!< Defined in BIP37
+    //////////////////////////////
+    MSG_TXLOCK_REQUEST,
+    MSG_TXLOCK_VOTE,
+    MSG_SPORK,
+    MSG_MASTERNODE_WINNER,
+    MSG_MASTERNODE_SCANNING_ERROR,
+    MSG_BUDGET_VOTE,
+    MSG_BUDGET_PROPOSAL,
+    MSG_BUDGET_FINALIZED,
+    MSG_BUDGET_FINALIZED_VOTE,
+    MSG_MASTERNODE_QUORUM,
+    MSG_MASTERNODE_ANNOUNCE,
+    MSG_MASTERNODE_PING,
+    MSG_DSTX,
+    //////////////////////////////
+    MSG_WTX,                                          //!< Defined in BIP 339
     // The following can only occur in getdata. Invs always use TX/WTX or BLOCK.
-    MSG_FILTERED_BLOCK = 3,                           //!< Defined in BIP37
-    MSG_CMPCT_BLOCK = 4,                              //!< Defined in BIP152
+    MSG_CMPCT_BLOCK,                                  //!< Defined in BIP152
     MSG_WITNESS_BLOCK = MSG_BLOCK | MSG_WITNESS_FLAG, //!< Defined in BIP144
     MSG_WITNESS_TX = MSG_TX | MSG_WITNESS_FLAG,       //!< Defined in BIP144
     // MSG_FILTERED_WITNESS_BLOCK is defined in BIP144 as reserved for future
@@ -497,6 +566,12 @@ public:
     bool IsGenBlkMsg() const
     {
         return type == MSG_BLOCK || type == MSG_FILTERED_BLOCK || type == MSG_CMPCT_BLOCK || type == MSG_WITNESS_BLOCK;
+    }
+    bool IsGenMnMsg() const
+    {
+        return type == MSG_SPORK || type == MSG_MASTERNODE_WINNER || type == MSG_BUDGET_VOTE || type == MSG_BUDGET_PROPOSAL || \
+               type == MSG_BUDGET_FINALIZED || type == MSG_BUDGET_FINALIZED_VOTE || type == MSG_MASTERNODE_ANNOUNCE || \
+               type == MSG_MASTERNODE_PING;
     }
 
     uint32_t type;

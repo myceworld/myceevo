@@ -181,6 +181,9 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::UTIL, "util"},
     {BCLog::BLOCKSTORE, "blockstorage"},
     {BCLog::POS, "pos"},
+    {BCLog::MASTERNODE, "masternode"},
+    {BCLog::MNPAYMENTS, "mnpayments"},
+    {BCLog::MNBUDGET, "mnbudget"},
     {BCLog::ALL, "1"},
     {BCLog::ALL, "all"},
 };
@@ -283,6 +286,12 @@ std::string LogCategoryToStr(BCLog::LogFlags category)
         return "blockstorage";
     case BCLog::LogFlags::POS:
         return "pos";
+    case BCLog::LogFlags::MASTERNODE:
+        return "masternode";
+    case BCLog::LogFlags::MNPAYMENTS:
+        return "mnpayments";
+    case BCLog::LogFlags::MNBUDGET:
+        return "mnbudget";
     case BCLog::LogFlags::ALL:
         return "all";
     }

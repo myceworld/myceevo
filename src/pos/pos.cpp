@@ -330,6 +330,10 @@ bool CheckProofOfStake(const CBlock& block, uint256& hashProofOfStake, std::uniq
         return error("CheckProofOfStake() : called on non-coinstake %s", tx->GetHash().ToString());
     }
 
+    if (node::fImporting || node::fReindex) {
+        return true;
+    }
+
     const CTxIn& txin = tx->vin[0];
 
     // Get transaction index for the previous transaction

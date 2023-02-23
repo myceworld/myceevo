@@ -124,4 +124,7 @@ struct timeval MillisToTimeval(std::chrono::milliseconds ms);
 /** Sanity check epoch match normal Unix epoch */
 bool ChronoSanityCheck();
 
+std::string DateTimeStrFormat(const char* pszFormat, int64_t nTime);
+std::string DurationToDHMS(int64_t nDurationTime);
+
 #endif // BITCOIN_UTIL_TIME_H

@@ -94,6 +94,8 @@ public:
         consensus.nWalletUpgrade = 378500;
         consensus.nWalletVersion = 8;
         consensus.nModifierInterval = 180;
+        consensus.nBudgetFeeConfirmations = 6;
+        consensus.nSporkKey = "03f012092c5fe9ed406b43316fc87d8ace9e8eb7764999db00ef60009ddddfa723";
 
         // Deployment of Taproot (BIPs 340-342)
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].bit = 2;

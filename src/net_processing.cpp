@@ -41,6 +41,14 @@
 #include <util/trace.h>
 #include <validation.h>
 
+#include <mn_processing.h>
+#include <masternode/init.h>
+#include <masternode/masternode-budget.h>
+#include <masternode/masternode-payments.h>
+#include <masternode/masternode-sync.h>
+#include <masternode/masternodeman.h>
+#include <masternode/spork.h>
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -291,6 +299,15 @@ struct Peer {
          *  mempool to sort transactions in dependency order before relay, so
          *  this does not have to be sorted. */
         std::set<uint256> m_tx_inventory_to_send GUARDED_BY(m_tx_inventory_mutex);
+
+        mutable RecursiveMutex m_inv_inventory_mutex;
+        /** A filter of all the invs that the peer has announced to
+         *  us or we have announced to the peer. We use this to avoid announcing
+         *  the same inv to a peer that already has the inventory item. */
+        CRollingBloomFilter m_inv_inventory_known_filter GUARDED_BY(m_inv_inventory_mutex){50000, 0.000001};
+        /** Set of inventory invs we still have to announce. */
+        std::set<CInv> m_inv_inventory_to_send GUARDED_BY(m_inv_inventory_mutex);
+
         /** Whether the peer has requested us to send our complete mempool. Only
          *  permitted if the peer has NetPermissionFlags::Mempool. See BIP35. */
         bool m_send_mempool GUARDED_BY(m_tx_inventory_mutex){false};
@@ -528,6 +545,9 @@ public:
     bool IgnoresIncomingTxs() override { return m_ignore_incoming_txs; }
     void SendPings() override EXCLUSIVE_LOCKS_REQUIRED(!m_peer_mutex);
     void RelayTransaction(const uint256& txid, const uint256& wtxid) override EXCLUSIVE_LOCKS_REQUIRED(!m_peer_mutex);
+    void RelayInventory(const CInv& inv) override EXCLUSIVE_LOCKS_REQUIRED(!m_peer_mutex);
+    void PushTransaction(Peer& peer, const uint256& txid, const uint256& wtxid) EXCLUSIVE_LOCKS_REQUIRED(!m_peer_mutex);
+    void PushInventory(Peer& peer, const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(!m_peer_mutex);
     void SetBestHeight(int height) override { m_best_height = height; };
     void UnitTestMisbehaving(NodeId peer_id, int howmuch) override EXCLUSIVE_LOCKS_REQUIRED(!m_peer_mutex) { Misbehaving(*Assert(GetPeerRef(peer_id)), howmuch, ""); };
     void ProcessMessage(CNode& pfrom, const std::string& msg_type, CDataStream& vRecv,
@@ -775,6 +795,9 @@ private:
     int m_num_preferred_download_peers GUARDED_BY(cs_main){0};
 
     bool AlreadyHaveTx(const GenTxid& gtxid)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main, !m_recent_confirmed_transactions_mutex);
+
+    bool AlreadyHaveInv(const CInv& inv)
         EXCLUSIVE_LOCKS_REQUIRED(cs_main, !m_recent_confirmed_transactions_mutex);
 
     /**
@@ -1068,6 +1091,15 @@ static void AddKnownTx(Peer& peer, const uint256& hash)
 
     LOCK(tx_relay->m_tx_inventory_mutex);
     tx_relay->m_tx_inventory_known_filter.insert(hash);
+}
+
+static void AddKnownInv(Peer& peer, const CInv& inv)
+{
+    auto tx_relay = peer.GetTxRelay();
+    if (!tx_relay) return;
+
+    LOCK(tx_relay->m_inv_inventory_mutex);
+    tx_relay->m_inv_inventory_known_filter.insert(inv.hash);
 }
 
 /** Whether this peer can serve us blocks. */
@@ -1997,6 +2029,27 @@ bool PeerManagerImpl::AlreadyHaveBlock(const uint256& block_hash)
     return m_chainman.m_blockman.LookupBlockIndex(block_hash) != nullptr;
 }
 
+bool PeerManagerImpl::AlreadyHaveInv(const CInv& inv)
+{
+    if (m_chainman.ActiveChain().Tip()->GetBlockHash() != hashRecentRejectsChainTip) {
+        // If the chain tip has changed previously rejected transactions
+        // might be now valid, e.g. due to a nLockTime'd tx becoming valid,
+        // or a double-spend. Reset the rejects filter and give those
+        // txs a second chance.
+        hashRecentRejectsChainTip = m_chainman.ActiveChain().Tip()->GetBlockHash();
+        m_recent_rejects.reset();
+    }
+
+    const uint256& hash = inv.hash;
+
+    {
+        LOCK(m_recent_confirmed_transactions_mutex);
+        if (m_recent_confirmed_transactions.contains(hash)) return true;
+    }
+
+    return m_recent_rejects.contains(hash);
+}
+
 void PeerManagerImpl::SendPings()
 {
     LOCK(m_peer_mutex);
@@ -2006,24 +2059,46 @@ void PeerManagerImpl::SendPings()
 void PeerManagerImpl::RelayTransaction(const uint256& txid, const uint256& wtxid)
 {
     LOCK(m_peer_mutex);
-    for(auto& it : m_peer_map) {
+    for (auto& it : m_peer_map) {
         Peer& peer = *it.second;
         auto tx_relay = peer.GetTxRelay();
         if (!tx_relay) continue;
+        PushTransaction(peer, txid, wtxid);
+    }
+}
 
-        LOCK(tx_relay->m_tx_inventory_mutex);
-        // Only queue transactions for announcement once the version handshake
-        // is completed. The time of arrival for these transactions is
-        // otherwise at risk of leaking to a spy, if the spy is able to
-        // distinguish transactions received during the handshake from the rest
-        // in the announcement.
-        if (tx_relay->m_next_inv_send_time == 0s) continue;
+void PeerManagerImpl::RelayInventory(const CInv& inv)
+{
+    LOCK(m_peer_mutex);
+    for (auto& it : m_peer_map) {
+        Peer& peer = *it.second;
+        auto tx_relay = peer.GetTxRelay();
+        if (!tx_relay) continue;
+        PushInventory(peer, inv);
+    }
+}
 
-        const uint256& hash{peer.m_wtxid_relay ? wtxid : txid};
-        if (!tx_relay->m_tx_inventory_known_filter.contains(hash)) {
-            tx_relay->m_tx_inventory_to_send.insert(hash);
-        }
-    };
+void PeerManagerImpl::PushTransaction(Peer& peer, const uint256& txid, const uint256& wtxid)
+{
+    auto tx_relay = peer.GetTxRelay();
+    if (!tx_relay) return;
+
+    const uint256& hash{peer.m_wtxid_relay ? wtxid : txid};
+    LOCK(tx_relay->m_tx_inventory_mutex);
+    if (!tx_relay->m_tx_inventory_known_filter.contains(hash)) {
+        tx_relay->m_tx_inventory_to_send.insert(hash);
+    }
+}
+
+void PeerManagerImpl::PushInventory(Peer& peer, const CInv& inv)
+{
+    auto tx_relay = peer.GetTxRelay();
+    if (!tx_relay) return;
+
+    LOCK(tx_relay->m_inv_inventory_mutex);
+    if (!tx_relay->m_inv_inventory_known_filter.contains(inv.hash)) {
+        tx_relay->m_inv_inventory_to_send.insert(inv);
+    }
 }
 
 void PeerManagerImpl::RelayAddress(NodeId originator,
@@ -2268,7 +2343,7 @@ void PeerManagerImpl::ProcessGetData(CNode& pfrom, Peer& peer, const std::atomic
     // Process as many TX items from the front of the getdata queue as
     // possible, since they're common and it's efficient to batch process
     // them.
-    while (it != peer.m_getdata_requests.end() && it->IsGenTxMsg()) {
+    while (it != peer.m_getdata_requests.end()) {
         if (interruptMsgProc) return;
         // The send buffer provides backpressure. If there's no space in
         // the buffer, pause processing until the next call.
@@ -2282,36 +2357,47 @@ void PeerManagerImpl::ProcessGetData(CNode& pfrom, Peer& peer, const std::atomic
             continue;
         }
 
-        CTransactionRef tx = FindTxForGetData(pfrom, ToGenTxid(inv), mempool_req, now);
-        if (tx) {
-            // WTX and WITNESS_TX imply we serialize with witness
-            int nSendFlags = (inv.IsMsgTx() ? SERIALIZE_TRANSACTION_NO_WITNESS : 0);
-            m_connman.PushMessage(&pfrom, msgMaker.Make(nSendFlags, NetMsgType::TX, *tx));
-            m_mempool.RemoveUnbroadcastTx(tx->GetHash());
-            // As we're going to send tx, make sure its unconfirmed parents are made requestable.
-            std::vector<uint256> parent_ids_to_add;
-            {
-                LOCK(m_mempool.cs);
-                auto txiter = m_mempool.GetIter(tx->GetHash());
-                if (txiter) {
-                    const CTxMemPoolEntry::Parents& parents = (*txiter)->GetMemPoolParentsConst();
-                    parent_ids_to_add.reserve(parents.size());
-                    for (const CTxMemPoolEntry& parent : parents) {
-                        if (parent.GetTime() > now - UNCONDITIONAL_RELAY_DELAY) {
-                            parent_ids_to_add.push_back(parent.GetTx().GetHash());
-                        }
-                    }
-                }
+        // bitcoin-type tx
+        if (inv.IsGenTxMsg())
+        {
+	    CTransactionRef tx = FindTxForGetData(pfrom, ToGenTxid(inv), mempool_req, now);
+	    if (tx) {
+	        // WTX and WITNESS_TX imply we serialize with witness
+	        int nSendFlags = (inv.IsMsgTx() ? SERIALIZE_TRANSACTION_NO_WITNESS : 0);
+	        m_connman.PushMessage(&pfrom, msgMaker.Make(nSendFlags, NetMsgType::TX, *tx));
+	        m_mempool.RemoveUnbroadcastTx(tx->GetHash());
+	        // As we're going to send tx, make sure its unconfirmed parents are made requestable.
+	        std::vector<uint256> parent_ids_to_add;
+	        {
+	            LOCK(m_mempool.cs);
+	            auto txiter = m_mempool.GetIter(tx->GetHash());
+	            if (txiter) {
+	                const CTxMemPoolEntry::Parents& parents = (*txiter)->GetMemPoolParentsConst();
+	                parent_ids_to_add.reserve(parents.size());
+	                for (const CTxMemPoolEntry& parent : parents) {
+	                    if (parent.GetTime() > now - UNCONDITIONAL_RELAY_DELAY) {
+	                        parent_ids_to_add.push_back(parent.GetTx().GetHash());
+	                    }
+	                }
+	            }
+	        }
+	        for (const uint256& parent_txid : parent_ids_to_add) {
+	            // Relaying a transaction with a recent but unconfirmed parent.
+	            if (WITH_LOCK(tx_relay->m_tx_inventory_mutex, return !tx_relay->m_tx_inventory_known_filter.contains(parent_txid))) {
+	                LOCK(cs_main);
+	                State(pfrom.GetId())->m_recently_announced_invs.insert(parent_txid);
+	            }
+	        }
+	    } else {
+	        vNotFound.push_back(inv);
+	    }
+        } else if (inv.IsGenMnMsg())
+        {
+            bool push = false;
+            ProcessGetDataMasternodeTypes(&pfrom, m_chainparams, &m_connman, m_mempool, inv, push);
+            if (!push) {
+                vNotFound.push_back(inv);
             }
-            for (const uint256& parent_txid : parent_ids_to_add) {
-                // Relaying a transaction with a recent but unconfirmed parent.
-                if (WITH_LOCK(tx_relay->m_tx_inventory_mutex, return !tx_relay->m_tx_inventory_known_filter.contains(parent_txid))) {
-                    LOCK(cs_main);
-                    State(pfrom.GetId())->m_recently_announced_invs.insert(parent_txid);
-                }
-            }
-        } else {
-            vNotFound.push_back(inv);
         }
     }
 
@@ -3655,6 +3741,19 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
                 if (!fAlreadyHave && !m_chainman.ActiveChainstate().IsInitialBlockDownload()) {
                     AddTxAnnouncement(pfrom, gtxid, current_time);
                 }
+            } else if (inv.IsGenMnMsg()) {
+                if (reject_tx_invs) {
+                    LogPrint(BCLog::NET, "transaction (%s) inv sent in violation of protocol, disconnecting peer=%d\n", inv.hash.ToString(), pfrom.GetId());
+                    pfrom.fDisconnect = true;
+                    return;
+                }
+                const bool fAlreadyHave = AlreadyHaveInv(inv);
+                LogPrint(BCLog::NET, "got inv: %s  %s peer=%d\n", inv.ToString(), fAlreadyHave ? "have" : "new", pfrom.GetId());
+
+                AddKnownInv(*peer, inv);
+                if (!fAlreadyHave && !m_chainman.ActiveChainstate().IsInitialBlockDownload()) {
+                    pfrom.AskFor(inv);
+                }
             } else {
                 LogPrint(BCLog::NET, "Unknown inv type \"%s\" received from peer=%d\n", inv.ToString(), pfrom.GetId());
             }
@@ -4766,8 +4865,15 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         return;
     }
 
-    // Ignore unknown commands for extensibility
-    LogPrint(BCLog::NET, "Unknown command \"%s\" from peer=%d\n", SanitizeString(msg_type), pfrom.GetId());
+    // masternode-type messages
+    {
+        mnodeman.ProcessMessage(&pfrom, msg_type, vRecv, &m_connman);
+        budget.ProcessMessage(&pfrom, msg_type, vRecv, &m_connman);
+        masternodePayments.ProcessMessage(&pfrom, msg_type, vRecv, &m_connman);
+        ProcessSpork(&pfrom, msg_type, vRecv, &m_connman);
+        masternodeSync.ProcessMessage(&pfrom, msg_type, vRecv, &m_connman);
+    }
+
     return;
 }
 
@@ -5518,8 +5624,10 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
                             hashToAnnounce.ToString(), m_chainman.ActiveChain().Tip()->GetBlockHash().ToString());
                     }
 
+                    bool fLegacyHost = pto->GetVersion() != PROTOCOL_VERSION;
+
                     // If the peer's chain has this block, don't inv it back.
-                    if (!PeerHasHeader(&state, pindex)) {
+                    if (!fLegacyHost && !PeerHasHeader(&state, pindex)) {
                         peer->m_blocks_for_inv_relay.push_back(hashToAnnounce);
                         LogPrint(BCLog::NET, "%s: sending inv peer=%d hash=%s\n", __func__,
                             pto->GetId(), hashToAnnounce.ToString());
@@ -5675,6 +5783,26 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
                             tx_relay->m_tx_inventory_known_filter.insert(txid);
                         }
                     }
+                    // Send non-tx/non-block inventory items
+                    while (!tx_relay->m_inv_inventory_to_send.empty()) {
+                        // get inv's from other set to send
+                        std::set<CInv>::const_iterator it = std::next(tx_relay->m_inv_inventory_to_send.end(), -1);
+                        CInv inv = *it;
+                        // Remove it from the to-be-sent set
+                        tx_relay->m_inv_inventory_to_send.erase(it);
+                        // Check if not in the filter already
+                        if (tx_relay->m_inv_inventory_known_filter.contains(inv.hash)) {
+                            continue;
+                        }
+                        // use existing limits with tx to limit other inv sends as well
+                        nRelayedTransactions++;
+                        vInv.emplace_back(inv);
+                        tx_relay->m_inv_inventory_known_filter.insert(inv.hash);
+                        if (vInv.size() == MAX_INV_SZ) {
+                            m_connman.PushMessage(pto, msgMaker.Make(NetMsgType::INV, vInv));
+                            vInv.clear();
+                        }
+                    }
                 }
         }
         if (!vInv.empty())
@@ -5789,6 +5917,19 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
             }
         }
 
+        //
+        // Message: getdata (other inventory)
+        //
+        while (!pto->mapAskFor.empty()) {
+            const CInv& inv = (*pto->mapAskFor.begin()).second;
+            LogPrint(BCLog::NET, "Requesting %s peer=%d\n", inv.ToString(), pto->GetId());
+            vGetData.push_back(inv);
+            if (vGetData.size() >= MAX_GETDATA_SZ) {
+                m_connman.PushMessage(pto, msgMaker.Make(NetMsgType::GETDATA, vGetData));
+                vGetData.clear();
+            }
+            pto->mapAskFor.erase(pto->mapAskFor.begin());
+        }
 
         if (!vGetData.empty())
             m_connman.PushMessage(pto, msgMaker.Make(NetMsgType::GETDATA, vGetData));

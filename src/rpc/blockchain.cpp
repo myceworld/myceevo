@@ -1423,6 +1423,9 @@ static RPCHelpMan getchaintips()
     // Always report the currently active tip.
     setTips.insert(active_chain.Tip());
 
+    int nBranchMin = -1;
+    int nCountMax = INT_MAX;
+
     /* Construct the output array.  */
     UniValue res(UniValue::VARR);
     for (const CBlockIndex* block : setTips) {
@@ -1430,8 +1433,13 @@ static RPCHelpMan getchaintips()
         obj.pushKV("height", block->nHeight);
         obj.pushKV("hash", block->phashBlock->GetHex());
 
+        const CBlockIndex* pindexFork = active_chain.FindFork(block);
         const int branchLen = block->nHeight - active_chain.FindFork(block)->nHeight;
+        if(branchLen < nBranchMin) continue;
+        if(nCountMax-- < 1) break;
+
         obj.pushKV("branchlen", branchLen);
+        obj.pushKV("forkpoint", pindexFork->phashBlock->GetHex());
 
         std::string status;
         if (active_chain.Contains(block)) {

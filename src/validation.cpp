@@ -3894,8 +3894,9 @@ bool Chainstate::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, BlockV
             return false;
         }
 
-        if (!stake)
+        if (!stake) {
             return error("%s: null stake ptr", __func__);
+        }
     }
 
     if (!accepted_header)

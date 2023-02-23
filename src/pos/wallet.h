@@ -8,6 +8,9 @@ namespace wallet {
    class CWallet;
 }
 
+class CStakeWallet;
+extern CStakeWallet stakeWallet;
+
 /**
  * Convenience class allowing stake functions to have easy access to the wallet,
  * without the linking issues that come with later bitcoin releases.

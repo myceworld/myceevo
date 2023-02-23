@@ -70,10 +70,13 @@ WalletView::WalletView(WalletModel* wallet_model, const PlatformStyle* _platform
     usedReceivingAddressesPage = new AddressBookPage(platformStyle, AddressBookPage::ForEditing, AddressBookPage::ReceivingTab, this);
     usedReceivingAddressesPage->setModel(walletModel->getAddressTableModel());
 
+    masternodeListPage = new MasternodeList(this);
+
     addWidget(overviewPage);
     addWidget(transactionsPage);
     addWidget(receiveCoinsPage);
     addWidget(sendCoinsPage);
+    addWidget(masternodeListPage);
 
     connect(overviewPage, &OverviewPage::transactionClicked, this, &WalletView::transactionClicked);
     // Clicking on a transaction on the overview pre-selects the transaction on the transaction history page
@@ -120,6 +123,7 @@ void WalletView::setClientModel(ClientModel *_clientModel)
     overviewPage->setClientModel(_clientModel);
     sendCoinsPage->setClientModel(_clientModel);
     walletModel->setClientModel(_clientModel);
+    if (walletModel) masternodeListPage->setClientModel(_clientModel);
 }
 
 void WalletView::processNewTransaction(const QModelIndex& parent, int start, int /*end*/)
@@ -151,6 +155,11 @@ void WalletView::gotoOverviewPage()
 void WalletView::gotoHistoryPage()
 {
     setCurrentWidget(transactionsPage);
+}
+
+void WalletView::gotoMasternodePage()
+{
+    setCurrentWidget(masternodeListPage);
 }
 
 void WalletView::gotoReceiveCoinsPage()

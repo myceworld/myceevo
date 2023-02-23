@@ -6,8 +6,17 @@
 #include <script/script.h>
 
 #include <util/strencodings.h>
+#include <util/string.h>
 
 #include <string>
+
+std::string ValueString(const std::vector<unsigned char>& vch)
+{
+    if (vch.size() <= 4)
+        return std::to_string(CScriptNum(vch, false).getint());
+    else
+        return HexStr(vch);
+}
 
 std::string GetOpName(opcodetype opcode)
 {
@@ -198,6 +207,30 @@ unsigned int CScript::GetSigOpCount(const CScript& scriptSig) const
     return subscript.GetSigOpCount(true);
 }
 
+bool CScript::IsNormalPaymentScript() const
+{
+    if(this->size() != 25) return false;
+
+    std::string str;
+    opcodetype opcode;
+    const_iterator pc = begin();
+    int i = 0;
+    while (pc < end())
+    {
+        GetOp(pc, opcode);
+
+        if(     i == 0 && opcode != OP_DUP) return false;
+        else if(i == 1 && opcode != OP_HASH160) return false;
+        else if(i == 3 && opcode != OP_EQUALVERIFY) return false;
+        else if(i == 4 && opcode != OP_CHECKSIG) return false;
+        else if(i == 5) return false;
+
+        i++;
+    }
+
+    return true;
+}
+
 bool CScript::IsPayToScriptHash() const
 {
     // Extra-fast test for pay-to-script-hash CScripts:
@@ -253,6 +286,31 @@ bool CScript::IsPushOnly(const_iterator pc) const
 bool CScript::IsPushOnly() const
 {
     return this->IsPushOnly(begin());
+}
+
+std::string CScript::ToString() const
+{
+    std::string str;
+    opcodetype opcode;
+    std::vector<unsigned char> vch;
+    const_iterator pc = begin();
+    while (pc < end())
+    {
+        if (!str.empty())
+            str += " ";
+        if (!GetOp(pc, opcode, vch))
+        {
+            str += "[error]";
+            return str;
+        }
+        if (0 <= opcode && opcode <= OP_PUSHDATA4) {
+            str += ValueString(vch);
+        } else {
+            str += GetOpName(opcode);
+        }
+
+    }
+    return str;
 }
 
 std::string CScriptWitness::ToString() const

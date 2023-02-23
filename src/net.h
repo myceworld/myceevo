@@ -72,6 +72,8 @@ static const int MAX_BLOCK_RELAY_ONLY_CONNECTIONS = 2;
 static const int MAX_FEELER_CONNECTIONS = 1;
 /** -listen default */
 static const bool DEFAULT_LISTEN = true;
+/** The maximum number of entries in mapAskFor */
+static const size_t MAPASKFOR_MAX_SZ = 50000;
 /** The maximum number of peer connections to maintain. */
 static const unsigned int DEFAULT_MAX_PEER_CONNECTIONS = 125;
 /** The default for -maxuploadtarget. 0 = Unlimited */
@@ -373,6 +375,7 @@ public:
     Mutex cs_vSend;
     Mutex m_sock_mutex;
     Mutex cs_vRecv;
+    std::multimap<int64_t, CInv> mapAskFor;
 
     RecursiveMutex cs_vProcessMsg;
     std::list<CNetMessage> vProcessMsg GUARDED_BY(cs_vProcessMsg);
@@ -396,6 +399,7 @@ public:
     //! Whether this peer is an inbound onion, i.e. connected via our Tor onion service.
     const bool m_inbound_onion;
     std::atomic<int> nVersion{0};
+    std::atomic<bool> fMasternode{false};
     Mutex m_subver_mutex;
     /**
      * cleanSubVer is a sanitized string of the user agent byte array we read
@@ -569,6 +573,10 @@ public:
     {
         return m_greatest_common_version;
     }
+    int GetVersion() const
+    {
+        return nVersion;
+    }
 
     CService GetAddrLocal() const EXCLUSIVE_LOCKS_REQUIRED(!m_addr_local_mutex);
     //! May not be called more than once
@@ -584,6 +592,8 @@ public:
     {
         nRefCount--;
     }
+
+    void AskFor(const CInv& inv);
 
     void CloseSocketDisconnect() EXCLUSIVE_LOCKS_REQUIRED(!m_sock_mutex);
 
@@ -745,6 +755,7 @@ public:
     bool GetNetworkActive() const { return fNetworkActive; };
     bool GetUseAddrmanOutgoing() const { return m_use_addrman_outgoing; };
     void SetNetworkActive(bool active);
+    CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fCountFailure, ConnectionType conn_type);
     void OpenNetworkConnection(const CAddress& addrConnect, bool fCountFailure, CSemaphoreGrant* grantOutbound, const char* strDest, ConnectionType conn_type);
     bool CheckIncomingNonce(uint64_t nonce);
 
@@ -865,6 +876,12 @@ public:
     /** Return true if we should disconnect the peer for failing an inactivity check. */
     bool ShouldRunInactivityChecks(const CNode& node, std::chrono::seconds now) const;
 
+    AddrMan& addrman;
+    void RelayInv(CInv &inv);
+    void CopyNodeVector(std::vector<CNode*>& vecNodesCopy);
+    void OpenMasternodeConnection(const CAddress &addrConnect);
+    CNode* FindNode(const CService& addr);
+
 private:
     struct ListenSocket {
     public:
@@ -948,7 +965,6 @@ private:
     CNode* FindNode(const CNetAddr& ip);
     CNode* FindNode(const CSubNet& subNet);
     CNode* FindNode(const std::string& addrName);
-    CNode* FindNode(const CService& addr);
 
     /**
      * Determine whether we're already connected to a given address, in order to
@@ -957,7 +973,6 @@ private:
     bool AlreadyConnectedToAddress(const CAddress& addr);
 
     bool AttemptToEvictConnection();
-    CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fCountFailure, ConnectionType conn_type);
     void AddWhitelistPermissionFlags(NetPermissionFlags& flags, const CNetAddr &addr) const;
 
     void DeleteNode(CNode* pnode);
@@ -1002,7 +1017,6 @@ private:
     std::vector<ListenSocket> vhListenSocket;
     std::atomic<bool> fNetworkActive{true};
     bool fAddressesInitialized{false};
-    AddrMan& addrman;
     const NetGroupManager& m_netgroupman;
     std::deque<std::string> m_addr_fetches GUARDED_BY(m_addr_fetches_mutex);
     Mutex m_addr_fetches_mutex;

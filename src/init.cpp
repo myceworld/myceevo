@@ -32,6 +32,16 @@
 #include <interfaces/init.h>
 #include <interfaces/node.h>
 #include <mapport.h>
+#include <masternode/activemasternode.h>
+#include <masternode/budgetdb.h>
+#include <masternode/init.h>
+#include <masternode/masternode-budget.h>
+#include <masternode/masternode-payments.h>
+#include <masternode/masternodeconfig.h>
+#include <masternode/masternodeman.h>
+#include <masternode/masternodesigner.h>
+#include <masternode/spork.h>
+#include <masternode/sporkdb.h>
 #include <net.h>
 #include <net_permissions.h>
 #include <net_processing.h>
@@ -124,6 +134,9 @@ using node::VerifyLoadedChainstate;
 using node::fPruneMode;
 using node::fReindex;
 using node::nPruneTarget;
+
+static const bool DEFAULT_MASTERNODE  = false;
+static const bool DEFAULT_MNCONFLOCK = true;
 
 static const bool DEFAULT_PROXYRANDOMIZE = true;
 static const bool DEFAULT_REST_ENABLE = false;
@@ -231,6 +244,10 @@ void Shutdown(NodeContext& node)
         client->flush();
     }
     StopMapPort();
+
+    // Kill the masternode thread here as it relies on connman which is about
+    // to be destroyed directly below
+    if (masternodeThread.joinable()) masternodeThread.join();
 
     // Because these depend on each-other, we make sure that neither can be
     // using the other before destroying them.
@@ -1175,6 +1192,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     for (const auto& client : node.chain_clients) {
         client->registerRpcs();
     }
+    g_rpc_node = &node;
 #if ENABLE_ZMQ
     RegisterZMQRPCCommands(tableRPC);
 #endif
@@ -1406,6 +1424,13 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     assert(!node.mempool);
     assert(!node.chainman);
 
+    if (node.chainman) {
+        LOCK(cs_main);
+        for (Chainstate* chainstate : node.chainman->GetAll()) {
+            chainstate->ResetBlockFailureFlags(nullptr);
+        }
+    }
+
     CTxMemPool::Options mempool_opts{
         .estimator = node.fee_estimator.get(),
         .check_ratio = chainparams.DefaultConsistencyChecks() ? 1 : 0,
@@ -1502,6 +1527,9 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     }
 
     ChainstateManager& chainman = *Assert(node.chainman);
+
+    // Pass chainmanager pointer to our masternode objects
+    InitObjects(&chainman);
 
     assert(!node.peerman);
     node.peerman = PeerManager::make(*node.connman, *node.addrman, node.banman.get(),
@@ -1616,7 +1644,111 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
         return false;
     }
 
-    // ********************************************************* Step 12: start node
+    // ********************************************************* Step 12: start masternode functions
+
+    uiInterface.InitMessage(_("Loading spork cache…").translated);
+
+    pSporkDB = new CSporkDB(0, false, false);
+
+    uiInterface.InitMessage(_("Loading masternode cache…").translated);
+
+    CMasternodeDB mndb;
+    CMasternodeDB::ReadResult readResult = mndb.Read(mnodeman);
+    if (readResult == CMasternodeDB::FileError)
+        LogPrintf("Missing masternode cache file - mncache.dat, will try to recreate\n");
+    else if (readResult != CMasternodeDB::Ok) {
+        LogPrintf("Error reading mncache.dat: ");
+        if (readResult == CMasternodeDB::IncorrectFormat)
+            LogPrintf("magic is ok but data has invalid format, will try to recreate\n");
+        else
+            LogPrintf("file format is unknown or invalid, please fix it manually\n");
+    }
+
+    uiInterface.InitMessage(_("Loading budget cache…").translated);
+
+    CBudgetDB budgetdb;
+    CBudgetDB::ReadResult readResult2 = budgetdb.Read(budget);
+
+    if (readResult2 == CBudgetDB::FileError)
+        LogPrintf("Missing budget cache - budget.dat, will try to recreate\n");
+    else if (readResult2 != CBudgetDB::Ok) {
+        LogPrintf("Error reading budget.dat: ");
+        if (readResult2 == CBudgetDB::IncorrectFormat)
+            LogPrintf("magic is ok but data has invalid format, will try to recreate\n");
+        else
+            LogPrintf("file format is unknown or invalid, please fix it manually\n");
+    }
+
+    //flag our cached items so we send them to our peers
+    budget.ResetSync();
+    budget.ClearSeen();
+
+    uiInterface.InitMessage(_("Loading masternode payment cache…").translated);
+
+    CMasternodePaymentDB mnpayments;
+    CMasternodePaymentDB::ReadResult readResult3 = mnpayments.Read(masternodePayments);
+
+    if (readResult3 == CMasternodePaymentDB::FileError)
+        LogPrintf("Missing masternode payment cache - mnpayments.dat, will try to recreate\n");
+    else if (readResult3 != CMasternodePaymentDB::Ok) {
+        LogPrintf("Error reading mnpayments.dat: ");
+        if (readResult3 == CMasternodePaymentDB::IncorrectFormat)
+            LogPrintf("magic is ok but data has invalid format, will try to recreate\n");
+        else
+            LogPrintf("file format is unknown or invalid, please fix it manually\n");
+    }
+
+    fMasterNode = gArgs.GetBoolArg("-masternode", false);
+
+    if (fMasterNode)
+    {
+        LogPrintf("MASTERNODE:\n");
+        strMasterNodeAddr = gArgs.GetArg("-masternodeaddr", "");
+        LogPrintf(" addr %s\n", strMasterNodeAddr.c_str());
+        if (!strMasterNodeAddr.empty()) {
+            CService mnAddr;
+            Lookup(strMasterNodeAddr, mnAddr, chainparams.GetDefaultPort(), true);
+            if (!mnAddr.IsValid()) {
+                InitError(strprintf(_("Invalid -masternodeaddr address.")));
+                return false;
+            }
+        }
+
+        strMasterNodePrivKey = gArgs.GetArg("-masternodeprivkey", "");
+        if (!strMasterNodePrivKey.empty()) {
+            CKey key;
+            CPubKey pubkey;
+            if (!legacySigner.SetKey(strMasterNodePrivKey, key, pubkey)) {
+                return InitError(_("Invalid masternodeprivkey. Please see documentation."));
+            }
+            activeMasternode.pubKeyMasternode = pubkey;
+        } else {
+            InitError(strprintf(_("You must specify a masternodeprivkey in the configuration. Please see documentation for help.")));
+            return false;
+        }
+    }
+
+    //get the mode of budget voting for this masternode
+    strBudgetMode = gArgs.GetArg("-budgetvotemode", "auto");
+
+    if (gArgs.GetBoolArg("-mnconflock", true)) {
+        LogPrintf("Locking Masternodes:\n");
+        uint256 mnTxHash;
+        auto wallet = stakeWallet.GetStakingWallet();
+        for (CMasternodeConfig::CMasternodeEntry mne : masternodeConfig.getEntries()) {
+            LogPrintf("  %s %s\n", mne.getTxHash(), mne.getOutputIndex());
+            mnTxHash.SetHex(mne.getTxHash());
+            COutPoint outpoint = COutPoint(mnTxHash, (unsigned int) std::stoul(mne.getOutputIndex().c_str()));
+            wallet->LockCoin(outpoint);
+        }
+    }
+
+    if (ShutdownRequested()) {
+        LogPrintf("Shutdown requested. Exiting.\n");
+        return false;
+    }
+
+    // ********************************************************* Step 13: start node
 
     int chain_active_height;
 
@@ -1801,6 +1933,8 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     }, DUMP_BANS_INTERVAL);
 
     if (node.peerman) node.peerman->StartScheduledTasks(*node.scheduler);
+
+    masternodeThread = std::thread(MasternodeThread, node.connman.get());
 
 #if HAVE_SYSTEM
     StartupNotify(args);

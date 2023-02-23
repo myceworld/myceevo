@@ -67,6 +67,9 @@ namespace BCLog {
         UTIL        = (1 << 25),
         BLOCKSTORE  = (1 << 26),
         POS         = (1 << 27),
+        MASTERNODE  = (1 << 28),
+        MNPAYMENTS  = (1 << 29),
+        MNBUDGET    = (1 << 30),
         ALL         = ~(uint32_t)0,
     };
     enum class Level {

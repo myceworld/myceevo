@@ -1,0 +1,38 @@
+// Copyright (c) 2022 The Myce Developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+#ifndef BUDGET_DB_H
+#define BUDGET_DB_H
+
+#include <masternode/masternode-budget.h>
+#include <fs.h>
+
+void DumpBudgets(CBudgetManager& budgetman);
+
+/** Save Budget Manager (budget.dat)
+ */
+class CBudgetDB
+{
+private:
+    fs::path pathDB;
+    std::string strMagicMessage;
+
+public:
+    enum ReadResult {
+        Ok,
+        FileError,
+        HashReadError,
+        IncorrectHash,
+        IncorrectMagicMessage,
+        IncorrectMagicNumber,
+        IncorrectFormat
+    };
+
+    CBudgetDB();
+    bool Write(const CBudgetManager& objToSave);
+    ReadResult Read(CBudgetManager& objToLoad, bool fDryRun = false);
+};
+
+#endif // BUDGET_DB_H
+

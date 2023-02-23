@@ -10,6 +10,8 @@
 static std::atomic<bool> g_initial_block_download_completed(false);
 
 namespace NetMsgType {
+
+//! bitcoin types
 const char *VERSION="version";
 const char *VERACK="verack";
 const char *ADDR="addr";
@@ -44,6 +46,24 @@ const char *CFHEADERS="cfheaders";
 const char *GETCFCHECKPT="getcfcheckpt";
 const char *CFCHECKPT="cfcheckpt";
 const char *WTXIDRELAY="wtxidrelay";
+
+//! myce types
+const char* IX = "ix";
+const char* IXLOCKVOTE = "txlvote";
+const char* SPORK = "spork";
+const char* GETSPORKS = "getsporks";
+const char* MNBROADCAST = "mnb";
+const char* MNPING = "mnp";
+const char* MNWINNER = "mnw";
+const char* GETMNWINNERS = "mnget";
+const char* BUDGETPROPOSAL = "mprop";
+const char* BUDGETVOTE = "mvote";
+const char* BUDGETVOTESYNC = "mnvs";
+const char* FINALBUDGET = "fbs";
+const char* FINALBUDGETVOTE = "fbvote";
+const char* SYNCSTATUSCOUNT = "ssc";
+const char* DSEG = "dseg";
+const char* DSEEP = "dseep";
 } // namespace NetMsgType
 
 /** All known message types. Keep this in the same order as the list of
@@ -84,6 +104,22 @@ const static std::string allNetMessageTypes[] = {
     NetMsgType::GETCFCHECKPT,
     NetMsgType::CFCHECKPT,
     NetMsgType::WTXIDRELAY,
+    ///////////////////////
+    NetMsgType::IX,
+    NetMsgType::IXLOCKVOTE,
+    NetMsgType::SPORK,
+    NetMsgType::GETSPORKS,
+    NetMsgType::MNBROADCAST,
+    NetMsgType::MNPING,
+    NetMsgType::MNWINNER,
+    NetMsgType::GETMNWINNERS,
+    NetMsgType::BUDGETPROPOSAL,
+    NetMsgType::BUDGETVOTE,
+    NetMsgType::BUDGETVOTESYNC,
+    NetMsgType::FINALBUDGET,
+    NetMsgType::FINALBUDGETVOTE,
+    NetMsgType::SYNCSTATUSCOUNT,
+    NetMsgType::DSEG
 };
 const static std::vector<std::string> allNetMessageTypesVec(std::begin(allNetMessageTypes), std::end(allNetMessageTypes));
 
@@ -162,6 +198,14 @@ std::string CInv::GetCommand() const
     case MSG_BLOCK:          return cmd.append(NetMsgType::BLOCK);
     case MSG_FILTERED_BLOCK: return cmd.append(NetMsgType::MERKLEBLOCK);
     case MSG_CMPCT_BLOCK:    return cmd.append(NetMsgType::CMPCTBLOCK);
+    case MSG_SPORK:                 return cmd.append(NetMsgType::SPORK);
+    case MSG_MASTERNODE_WINNER:     return cmd.append(NetMsgType::MNWINNER);
+    case MSG_BUDGET_VOTE:           return cmd.append(NetMsgType::BUDGETVOTE);
+    case MSG_BUDGET_PROPOSAL:       return cmd.append(NetMsgType::BUDGETVOTESYNC);
+    case MSG_BUDGET_FINALIZED:      return cmd.append(NetMsgType::FINALBUDGET);
+    case MSG_BUDGET_FINALIZED_VOTE: return cmd.append(NetMsgType::FINALBUDGETVOTE);
+    case MSG_MASTERNODE_ANNOUNCE:   return cmd.append(NetMsgType::MNBROADCAST);
+    case MSG_MASTERNODE_PING:       return cmd.append(NetMsgType::MNPING);
     default:
         throw std::out_of_range(strprintf("CInv::GetCommand(): type=%d unknown type", type));
     }
