@@ -655,6 +655,10 @@ private:
      *  m_chainman.m_best_header or our current tip */
     bool IsAncestorOfBestHeaderOrTip(const CBlockIndex* header) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+    /** Request blocks from this peer with a getdata request.
+     * This returns true if getdata is actually sent, and false otherwise.
+     */
+    bool MaybeSendGetData(CNode& pfrom, const std::vector<CInv>& vToFetch, Peer& peer);
     /** Request further headers from this peer with a given locator.
      * We don't issue a getheaders message if we have a recent one outstanding.
      * This returns true if a getheaders is actually sent, and false otherwise.
@@ -2597,6 +2601,14 @@ bool PeerManagerImpl::IsAncestorOfBestHeaderOrTip(const CBlockIndex* header)
     return false;
 }
 
+bool PeerManagerImpl::MaybeSendGetData(CNode& pfrom, const std::vector<CInv>& vToFetch, Peer& peer)
+{
+    const CNetMsgMaker msgMaker(pfrom.GetCommonVersion());
+
+    m_connman.PushMessage(&pfrom, msgMaker.Make(NetMsgType::GETDATA, vToFetch));
+    return true;
+}
+
 bool PeerManagerImpl::MaybeSendGetHeaders(CNode& pfrom, const CBlockLocator& locator, Peer& peer)
 {
     const CNetMsgMaker msgMaker(pfrom.GetCommonVersion());
@@ -3194,6 +3206,8 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
             return;
         }
 
+        pfrom.m_legacy_peer = nVersion == MIN_PEER_PROTO_VERSION;
+
         if (!vRecv.empty()) {
             // The version message includes information about the sending node which we don't use:
             //   - 8 bytes (service bits)
@@ -3598,6 +3612,8 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         const auto current_time{GetTime<std::chrono::microseconds>()};
         uint256* best_block{nullptr};
 
+        std::vector<CInv> vToFetch;
+
         for (CInv& inv : vInv) {
             if (interruptMsgProc) return;
 
@@ -3623,6 +3639,7 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
                     // provided should be the highest, so send a getheaders and
                     // then fetch the blocks we need to catch up.
                     best_block = &inv.hash;
+                    vToFetch.push_back(inv);
                 }
             } else if (inv.IsGenTxMsg()) {
                 if (reject_tx_invs) {
@@ -3656,10 +3673,18 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
             // use if we turned on sync with all peers).
             CNodeState& state{*Assert(State(pfrom.GetId()))};
             if (state.fSyncStarted || (!peer->m_inv_triggered_getheaders_before_sync && *best_block != m_last_block_inv_triggering_headers_sync)) {
-                if (MaybeSendGetHeaders(pfrom, GetLocator(m_chainman.m_best_header), *peer)) {
-                    LogPrint(BCLog::NET, "getheaders (%d) %s to peer=%d\n",
-                            m_chainman.m_best_header->nHeight, best_block->ToString(),
-                            pfrom.GetId());
+                if (pfrom.m_legacy_peer) {
+                    if (MaybeSendGetData(pfrom, vToFetch, *peer)) {
+                        LogPrint(BCLog::NET, "getdata (%d) %s to peer=%d\n",
+                                m_chainman.m_best_header->nHeight, best_block->ToString(),
+                                pfrom.GetId());
+                    }
+                } else {
+                    if (MaybeSendGetHeaders(pfrom, GetLocator(m_chainman.m_best_header), *peer)) {
+                        LogPrint(BCLog::NET, "getheaders (%d) %s to peer=%d\n",
+                                m_chainman.m_best_header->nHeight, best_block->ToString(),
+                                pfrom.GetId());
+                    }
                 }
                 if (!state.fSyncStarted) {
                     peer->m_inv_triggered_getheaders_before_sync = true;
@@ -4452,6 +4477,15 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         vRecv >> *pblock;
 
         LogPrint(BCLog::NET, "received block %s peer=%d\n", pblock->GetHash().ToString(), pfrom.GetId());
+
+        if (pfrom.m_legacy_peer) {
+            const CBlockIndex* pindexPrev = m_chainman.m_blockman.LookupBlockIndex(pblock->hashPrevBlock);
+            if (!pindexPrev) {
+                m_connman.PushMessage(&pfrom, msgMaker.Make(NetMsgType::GETBLOCKS, GetLocator(m_chainman.m_best_header), pblock->GetHash()));
+                LogPrint(BCLog::NET, "getblocks (%d) %s to peer=%d\n", m_chainman.m_best_header->nHeight, pblock->GetHash().ToString(), pfrom.GetId());
+                return;
+            }
+        }
 
         bool forceProcessing = false;
         const uint256 hash(pblock->GetHash());

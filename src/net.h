@@ -392,6 +392,7 @@ public:
     // Bind address of our side of the connection
     const CAddress addrBind;
     const std::string m_addr_name;
+    bool m_legacy_peer{false};
     //! Whether this peer is an inbound onion, i.e. connected via our Tor onion service.
     const bool m_inbound_onion;
     std::atomic<int> nVersion{0};
