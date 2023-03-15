@@ -80,7 +80,7 @@
 // Application startup time (used for uptime calculation)
 const int64_t nStartupTime = GetTime();
 
-const char * const BITCOIN_CONF_FILENAME = "bitcoin.conf";
+const char * const BITCOIN_CONF_FILENAME = "myce.conf";
 const char * const BITCOIN_SETTINGS_FILENAME = "settings.json";
 
 bool fMasterNode;
@@ -842,7 +842,7 @@ static std::string FormatException(const std::exception* pex, std::string_view t
     char pszModule[MAX_PATH] = "";
     GetModuleFileNameA(nullptr, pszModule, sizeof(pszModule));
 #else
-    const char* pszModule = "bitcoin";
+    const char* pszModule = "myce";
 #endif
     if (pex)
         return strprintf(
@@ -866,7 +866,7 @@ fs::path GetDefaultDataDir()
     // Unix-like: ~/.bitcoin
 #ifdef WIN32
     // Windows
-    return GetSpecialFolderPath(CSIDL_APPDATA) / "Bitcoin";
+    return GetSpecialFolderPath(CSIDL_APPDATA) / "Myce";
 #else
     fs::path pathRet;
     char* pszHome = getenv("HOME");
@@ -876,10 +876,10 @@ fs::path GetDefaultDataDir()
         pathRet = fs::path(pszHome);
 #ifdef MAC_OSX
     // macOS
-    return pathRet / "Library/Application Support/Bitcoin";
+    return pathRet / "Library/Application Support/Myce";
 #else
     // Unix-like
-    return pathRet / ".bitcoin";
+    return pathRet / ".myce";
 #endif
 #endif
 }
